@@ -5,4 +5,6 @@
     <string name="add">Add</string>
     <string name="clear">Clear</string>
     <string name="next_activity">Next Activity</string>
+    <string name="app_paused">App Paused</string>
+    <string name="paused_count_0">Paused count: 0</string>
 </resources>

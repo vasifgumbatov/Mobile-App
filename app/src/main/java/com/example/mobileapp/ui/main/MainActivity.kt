@@ -2,16 +2,22 @@ package com.example.mobileapp.ui.main
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.provider.Settings
+import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
 import android.widget.ListView
+import android.widget.RemoteViews
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.app.NotificationCompat
 import androidx.lifecycle.ViewModelProvider
 import com.example.mobileapp.R
@@ -26,6 +32,10 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+
+        checkNotificationPermission()
+
+        AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM)
 
         viewModel = ViewModelProvider(this)[MainViewModel::class.java]
 
@@ -80,31 +90,82 @@ class MainActivity : AppCompatActivity() {
             val selectedItem = adapter.getItem(position)
             Toast.makeText(this, selectedItem, Toast.LENGTH_SHORT).show()
         }
+
+        createNotificationChannel()
+
+        viewModel.pauseCount.observe(this) { count ->
+            showCustomNotification(count)
+        }
     }
 
     override fun onPause() {
         super.onPause()
         viewModel.incrementPauseCount()
-        showNotification(viewModel.getPauseCount())
+        showNotification(viewModel.pauseCount.value ?: 0)
+        Log.d("NotificationTest", "onPause called")
     }
 
-    private fun showNotification(count: Int) {
-        val notificationManager =
-            getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-
+    private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 "pause_channel",
                 "Pause Notifications",
-                NotificationManager.IMPORTANCE_DEFAULT
-            )
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                enableLights(true)
+                lightColor = Color.RED
+                enableVibration(true)
+                description = "This channel shows pause notifications"
+            }
+            val notificationManager = getSystemService(NotificationManager::class.java)
             notificationManager.createNotificationChannel(channel)
         }
+    }
+
+    private fun checkNotificationPermission() {
+        val notificationManager = getSystemService(NotificationManager::class.java)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = notificationManager.getNotificationChannel("pause_channel")
+            if (channel?.importance == NotificationManager.IMPORTANCE_NONE) {
+                val intent = Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).apply {
+                    putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+                    putExtra(Settings.EXTRA_CHANNEL_ID, "pause_channel")
+                }
+                startActivity(intent)
+            }
+        }
+    }
+
+    private fun showCustomNotification(count: Int) {
+        val notificationLayout = RemoteViews(packageName, R.layout.custom_notification)
+        notificationLayout.setTextViewText(R.id.tvContent, "Paused count: $count")
+
+        val notification = NotificationCompat.Builder(this, "pause_channel")
+            .setSmallIcon(R.drawable.icon_notification)
+            .setCustomContentView(notificationLayout)
+            .setAutoCancel(true)
+            .build()
+
+        val notificationManager = getSystemService(NotificationManager::class.java)
+        notificationManager.notify(1, notification)
+    }
+
+    private fun showNotification(count: Int) {
+        val notificationManager = getSystemService(NotificationManager::class.java)
+
+        Log.d("NotificationTest", "Notification count: $count")
+
+        val intent = Intent(this, MainActivity::class.java)
+        val pendingIntent = PendingIntent.getActivity(
+            this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
 
         val notification = NotificationCompat.Builder(this, "pause_channel")
             .setSmallIcon(R.drawable.icon_notification)
             .setContentTitle("App Paused")
             .setContentText("Paused count: $count")
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setContentIntent(pendingIntent)
             .setAutoCancel(true)
             .build()
 
